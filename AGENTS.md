@@ -1,75 +1,78 @@
 # AGENTS.md
 
-Android-приложение «Карта нищеброда» (Jetpack Compose) — нативный аналог веб-версии. Спецификация API бэкенда: `/home/kovaleff/www/cheap-eats/.ai/api-for-andoid.md` — читать перед работой с сетевым слоем.
+Android-клиент «Карта нищеброда» (Jetpack Compose) — нативный аналог веб-версии. Бэкенд и веб лежат в `/home/kovaleff/www/cheap-eats` (dev-домен `https://cheap-eats`). Актуальная спецификация API — `/home/kovaleff/www/cheap-eats/.ai/api-for-andoid.md` (вне этого репозитория, читать перед работой с сетью).
 
-## Project Overview
+## Сборка и проверка
 
-Kotlin + Jetpack Compose клиент для Laravel-бэкенда «Карта нищеброда» (карта дешёвых заведений). Веб-версия: `/home/kovaleff/www/cheap-eats`, доступна как `https://cheap-eats`. Русскоязычный UI, тёмная фирменная тема.
-
-## Tech Stack
-
-- **Kotlin 2.2.10, AGP 9.3.3, Gradle 9.5 (wrapper), compileSdk 36, minSdk 24**
-- **UI**: Jetpack Compose (BOM 2026.02.01), Material 3, material-icons-extended
-- **Навигация**: androidx.navigation-compose (`home` и `map?categoryId={id}`)
-- **Сеть**: Retrofit + kotlinx-serialization (не Moshi/GSON), OkHttp 4
-- **Карта**: osmdroid 6.1.20 + тайлы OpenStreetMap (MAPNIK)
-- **Картинки**: Coil 2.7
-- **DI**: нет (объекты-синглтоны `ApiClient`/`CheapEatsRepository`) — при росте проекта рассмотреть Hilt
-- Версии — в `gradle/libs.versions.toml` (version catalog)
-
-## Commands
+- Один модуль `:app`. Kotlin 2.2.10, AGP 9.3.3, Gradle 9.5.0 (wrapper), демон на JDK 21 (`gradle/gradle-daemon-jvm.properties`), compileSdk 36.1 (`release(36) { minorApiLevel = 1 }`), targetSdk 36, minSdk 24, Java 11.
+- Compose BOM 2026.02.01 + Material3; Retrofit + kotlinx-serialization; osmdroid 6.1.20 (MAPNIK); Coil 2.7. Версии — `gradle/libs.versions.toml`.
+- AGP 9 включает Kotlin сам: плагин `org.jetbrains.kotlin.android` не подключён и не нужен; подключены только `kotlin-compose` и `kotlin-serialization`.
+- DI нет: `ApiClient` — object, `CheapEatsRepository` создаётся на месте в ViewModel.
 
 ```bash
-# Сборка debug APK
-./gradlew :app:assembleDebug
-
-# Установка и запуск на эмуляторе (эмулятор должен быть запущен)
-/mnt/dockerDisk/Progs/Android/Sdk/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk
-/mnt/dockerDisk/Progs/Android/Sdk/platform-tools/adb shell am start -n com.kovaleff.cheapeats/.MainActivity
+./gradlew :app:assembleDebug              # APK: app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:testDebugUnitTest          # единственный тест — заглушка ExampleUnitTest
+./gradlew :app:connectedDebugAndroidTest  # требует запущенный эмулятор
 ```
 
-## Architecture
+Своих тестов, ktlint и CI нет: реальная проверка — сборка + ручной прогон. Один тест: `./gradlew :app:testDebugUnitTest --tests "com.kovaleff.cheapeats.ExampleUnitTest"`.
 
-```
-app/src/main/java/com/kovaleff/cheapeats/
-├── MainActivity.kt              # NavHost: home / map
-├── CheapEatsApplication.kt      # ImageLoader для Coil (общий OkHttp с devDns)
-├── data/
-│   ├── api/                     # Retrofit-интерфейсы + ApiConfig (URL, UA)
-│   ├── model/                   # DTO (kotlinx-serialization), ApiDtos.kt — запросы
-│   ├── remote/ApiClient.kt      # OkHttp + Retrofit-фабрики, devDns
-│   └── repository/CheapEatsRepository.kt  # вся бизнес-логика (Overpass, sync, geocode)
-└── ui/
-    ├── home/                    # HomeScreen + HomeViewModel
-    ├── map/                     # MapScreen, MapViewModel, CheapEatsMapView (osmdroid)
-    └── theme/                   # брендовые цвета веб-версии, тёмная тема
+## Установка и эмулятор
+
+```bash
+ADB=/mnt/dockerDisk/Progs/Android/Sdk/platform-tools/adb
+$ADB install -r app/build/outputs/apk/debug/app-debug.apk
+$ADB shell am start -n com.kovaleff.cheapeats/.MainActivity
+$ADB shell pm grant com.kovaleff.cheapeats android.permission.ACCESS_FINE_LOCATION
+$ADB shell pm grant com.kovaleff.cheapeats android.permission.ACCESS_COARSE_LOCATION
+$ADB emu geo fix 38.9898 45.0197   # <lon> <lat>, Краснодар
 ```
 
-ViewModel через `viewModel()`, состояние — `StateFlow<UiState>`. Сетевые вызовы только из `viewModelScope.launch` через репозиторий.
+- SDK: `/mnt/dockerDisk/Progs/Android/Sdk` (`local.properties`). AVD `medium_phone` (API 35, x86_64), данные — `/mnt/oldWin/AVD/medium_phone.avd` (`~/.android/avd/medium_phone.ini`). Запуск: `/mnt/dockerDisk/Progs/Android/Sdk/emulator/emulator -avd medium_phone -no-window -gpu swiftshader_indirect`.
+- Тапы для UI-проверок — `$ADB shell input tap X Y`, где X/Y в физических пикселях экрана (`medium_phone` — 1080×2400), а не в координатах масштабированного скриншота.
+- Держать Gradle/AVD/кэши на дисках с местом: в `/home` его мало.
 
-## Environment (важно)
+## Структура
 
-- **Android SDK**: `/mnt/dockerDisk/Progs/Android/Sdk` (прописан в `local.properties`).
-- **Эмулятор**: AVD `medium_phone` (Android 15, google_apis_playstore, x86_64). Данные AVD лежат в `/mnt/oldWin/AVD/medium_phone.avd` (указатель — `~/.android/avd/medium_phone.ini`). Запуск: `$ANDROID_HOME/emulator/emulator -avd medium_phone -no-window -gpu swiftshader_indirect`.
-- **Gradle/кэши**: держать на дисках со свободным местом; в `/home` мало места (AVD оттуда перенесён).
-- **Разрешения локации**: на эмуляторе выдавать `pm grant ... ACCESS_FINE_LOCATION` и `ACCESS_COARSE_LOCATION`; GPS ставить `adb emu geo fix 38.9898 45.0197` (Краснодар).
+```
+MainActivity.kt              NavHost: home / map?categoryId={id}
+CheapEatsApplication.kt      Coil ImageLoader поверх общего OkHttp
+data/api/                    Retrofit-интерфейсы + ApiConfig (UA, внешние URL)
+data/model/                  Models.kt — DTO; ApiDtos.kt — обёртки/запросы
+data/remote/ApiClient.kt     OkHttp/Retrofit, devDns, Json
+data/repository/             вся бизнес-логика (Overpass, sync, geocode)
+ui/home, ui/map, ui/theme
+```
 
-## Gotchas
+- Сетевые вызовы — только из `viewModelScope.launch` через `CheapEatsRepository`; UI не ходит в API напрямую. Состояние — `StateFlow<UiState>`.
+- Карта не использует `/venues`: маркеры строятся из живого Overpass-запроса (радиус 2 км) → `POST /venues/sync-overpass` (чанки по 200) → склейка по `osm_id`. С главной из бэкенда берутся только `/cities`, `/categories`, `/reviews`.
+- В `CheapEatsApiService` уже объявлены, но пока не используются `/venues`, `/venues/nearby`, `/collections`, comments, `/user`. Новую функциональность вести через репозиторий.
+- Авторизации нет: не хранится токен и не добавляется `Authorization: Bearer`, поэтому защищённые методы из спецификации (создание отзыва/фото, `/user`) дадут 401.
 
-- **dev-домен `cheap-eats` не резолвится из эмулятора** (он только в `/etc/hosts` хоста). Решение — кастомный `Dns` в `ApiClient.kt`: `cheap-eats` → `10.0.2.2`, остальные хосты через системный DNS. SNI и проверка сертификата остаются на оригинальном имени. Coil обязан использовать тот же клиент (`CheapEatsApplication.newImageLoader`), иначе картинки не грузятся.
-- **TLS**: сертификат сервера — mkcert. Корневой CA вшит: `app/src/main/res/raw/mkcert_ca.pem` + `res/xml/network_security_config.xml` (домен `cheap-eats`). Если сертификат перевыпущен — обновить PEM в res/raw.
-- **Overpass API**: зеркала капризны. Regex с `|` в запросе (`amenity~"cafe|fast_food|restaurant"`) даёт 500 на зеркалах за Apache — использовать отдельные statements по каждому `amenity="..."` (как в `CheapEatsRepository.fetchOverpassElements`). Ретраи: 2 круга по 3 зеркалам (`overpass-api.de` → `kumi.systems` → `private.coffee`). 502/500 от зеркал — временные, повторять позже, это не баг приложения.
-- **`sync-overpass` требует живой MySQL на хосте**: при `SQLSTATE[HY000] [2002] Connection refused` — `sudo systemctl start mysql` на хосте.
-- **Пины osmdroid**: hitTest работает по битмапу иконки (96px), хитбокс маленький — тапать по кружку пина точно. Увеличить при необходимости размер в `makePinDrawable`.
-- **Координаты тапов через adb** — в реальных пикселях экрана (1080×2400), а не в координатах скриншота.
-- **`is_default` у City приходит как int 0/1**, не boolean.
-- **`average_check` — строка** ("250.00", decimal:2). `osm_id` в путях API — строка.
-- Категории/города на бэке кэшируются на сутки — правки в админке появляются не сразу.
-- `exists: false` у venue — заглушка из OSM (в UI помечается «Не проверено»).
+## Сеть и dev-сервер
 
-## Conventions
+- Base URL задаётся не в `ApiConfig`, а в `app/build.gradle.kts`: `APP_BASE_URL` / `API_BASE_URL` (у API обязателен завершающий `/`). `ApiConfig` только читает `BuildConfig`.
+- Имя `cheap-eats` есть только в `/etc/hosts` хоста и из эмулятора не резолвится. `devDns` в `ApiClient` возвращает LAN-адрес (`DEV_HOST_LAN_IP` в `app/build.gradle.kts`, сейчас `192.168.0.102`) и `10.0.2.2`; OkHttp перебирает оба. При смене сети обновить IP (`ip -4 addr show`). SNI и проверка сертификата остаются на исходном имени.
+- TLS: сертификат mkcert. Корневой CA — `app/src/main/res/raw/mkcert_ca.pem` + `res/xml/network_security_config.xml` (домен `cheap-eats`). При перевыпуске сертификата обновить PEM.
+- OkHttp/Android **не отправляет SNI для односоставного хоста** `cheap-eats`, поэтому nginx отдаёт default-сертификат (`localhost.pem`). В его SAN обязан входить `cheap-eats`, иначе `SSLPeerUnverifiedException: Hostname cheap-eats not verified`. Серверные файлы: `/home/kovaleff/www/cheap-eats/{cheap-eats,localhost}.pem`, конфиги — `/etc/nginx/sites-available/cheap-eats*.conf`; перевыпуск — `mkcert -cert-file localhost.pem -key-file localhost-key.pem localhost 127.0.0.1 ::1 cheap-eats`, затем `sudo nginx -t && sudo systemctl reload nginx`.
+- Coil обязан использовать `ApiClient.okHttpClientForImages`, иначе картинки с dev-домена не загрузятся (`CheapEatsApplication`).
+- `Json` настроен на `ignoreUnknownKeys/isLenient/coerceInputValues/explicitNulls=false`: DTO могут быть частичными. Не добавлять Moshi/Gson.
 
-- Комментарии в коде — на русском, описывают ограничения/причины, а не «что делает строка».
-- Ссылки на соответствующие места веб-версии в комментариях (`как в resources/js/services/overpass.js`) — помогают держать паритет.
-- Имена по бренду веба: цвета в `ui/theme/Color.kt` дублируют `public/css/site.css`.
-- Новые эндпоинты добавлять в `data/api/CheapEatsApiService.kt` + DTO в `data/model/`, логика — только в репозитории.
+## Данные и Overpass
+
+- **`is_default` у City — boolean** (cast в `App\Models\City`), в `CityDto` — `Boolean`. Не возвращать `Int` и сравнение с `1`: разбор `/cities` упадёт. Поля `code` в API больше нет (в DTO осталось опциональным — безвредно).
+- `average_check` — строка decimal (`"250.00"`). `osm_id` в путях API — строка, в `SyncOverpass*` DTO — `String`, в `VenueDto` — `Long`. `open_night`, `exists`, `poison_risk` — boolean.
+- `exists: false` — заглушка из OSM, в UI помечается «Не проверено».
+- `GET .../comments` — по `slug`, `POST .../comments` — по `osm_id` (разные ключи).
+- Города и категории кэшируются на бэке на сутки — правки в админке видны не сразу.
+- Overpass: не объединять `amenity` в regex с `|` — зеркала за Apache отвечают 500; только отдельные statements (см. `fetchOverpassElements`). Ретраи: 2 круга × 3 зеркала с паузами; 500/502 — временные.
+- `sync-overpass` пишет в MySQL на хосте: при `SQLSTATE[HY000] [2002] Connection refused` — `sudo systemctl start mysql` (в этом окружении MySQL часто не запущен).
+- Лимиты API: `sync-overpass` 30/мин, comments 10/мин, geocode 20/мин, VK login 10/мин → 429; не ретраить вслепую.
+- Пины osmdroid: иконка 96 px, hitTest идёт по битмапу — тапить точно по кружку; размер меняется в `makePinDrawable`.
+
+## Конвенции
+
+- Комментарии — по-русски, про ограничения и причины, а не пересказ кода; полезны ссылки на веб-аналог (`resources/js/services/overpass.js`, `public/css/site.css`).
+- Цвета темы в `ui/theme/Color.kt` повторяют `public/css/site.css`.
+- Новый эндпоинт: метод в `data/api/CheapEatsApiService.kt`, DTO в `data/model/`, логика — только в `CheapEatsRepository`.
+- `classes.jar` и `org/` в корне — распакованный osmdroid (артефакт исследования), в сборке не участвуют; не добавлять в sourceSets.

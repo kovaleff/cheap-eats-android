@@ -15,7 +15,7 @@ data class CityDto(
     val name: String,
     val code: String? = null,
     @SerialName("id_region") val idRegion: Long? = null,
-    @SerialName("is_default") val isDefault: Int = 0,
+    @SerialName("is_default") val isDefault: Boolean = false,
     val geo: GeoPoint? = null,
 )
 

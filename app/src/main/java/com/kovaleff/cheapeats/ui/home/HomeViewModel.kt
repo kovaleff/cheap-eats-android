@@ -44,7 +44,7 @@ class HomeViewModel(
             try {
                 val cities = repository.getCities()
                 val selected = _state.value.selectedCity
-                    ?: cities.firstOrNull { it.isDefault == 1 }
+                    ?: cities.firstOrNull { it.isDefault }
                     ?: cities.firstOrNull()
                 val categories = repository.getCategories()
                     .map { it.copy(image = repository.absoluteUrl(it.image)) }

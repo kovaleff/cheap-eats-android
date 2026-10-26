@@ -51,7 +51,7 @@ object ApiClient {
         buildClient(HttpLoggingInterceptor.Level.NONE)
     }
 
-    private fun buildClient(logLevel: HttpLoggingInterceptor.Level = HttpLoggingInterceptor.Level.BASIC): OkHttpClient {
+    private fun buildClient(logLevel: HttpLoggingInterceptor.Level = HttpLoggingInterceptor.Level.BODY): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
             level = logLevel
         }
