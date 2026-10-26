@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Системные CA по умолчанию (Overpass, Nominatim, прод-сервер) -->
+    <base-config>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <!-- Локальный dev-сервер на mkcert (https://cheap-eats) -->
+    <domain-config>
+        <domain includeSubdomains="false">cheap-eats</domain>
+        <trust-anchors>
+            <certificates src="@raw/mkcert_ca" />
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
